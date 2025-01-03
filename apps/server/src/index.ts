@@ -24,22 +24,56 @@ io.on("connection", (socket) => {
   socket.on("joined-room", (room) => {
     const { roomCode, email } = room;
     console.log("joined room", roomCode, email);
+    
+    // Clear previous mappings for this email/socket
+    const oldSocketId = SocketMapping.get(email);
+    if (oldSocketId) {
+      SocketToEmail.delete(oldSocketId);
+    }
+    
     SocketMapping.set(email, socket.id);
     SocketToEmail.set(socket.id, email);
+    
     socket.join(roomCode);
     socket.emit("join-room", { roomCode });
-    socket.broadcast.to(roomCode).emit("user-joined", { email });
+    
+    // Notify others in the room
+    const roomSockets = io.sockets.adapter.rooms.get(roomCode);
+    if (roomSockets) {
+      for (const socketId of roomSockets) {
+        if (socketId !== socket.id) {
+          const otherEmail = SocketToEmail.get(socketId);
+          if (otherEmail) {
+            socket.emit("user-joined", { email: otherEmail });
+          }
+        }
+      }
+    }
   });
 
   socket.on("call-user", ({ email, offer }) => {
     console.log("calling user", email, offer); // Added logging for debugging
     const socketId = SocketMapping.get(email);
     const fromEmail = SocketToEmail.get(socket.id);
-    if (socketId) {
+    if (socketId && fromEmail) {
       console.log("calling user", fromEmail, socketId);
       socket.to(socketId).emit("incoming-call", { from: fromEmail, offer });
     } else {
       socket.emit("call-failed", { message: "User not found" });
+    }
+  });
+
+  socket.on("answer-call", ({ to, answer }) => {
+    const socketId = SocketMapping.get(to);
+    if (socketId) {
+      socket.to(socketId).emit("call-answered", { answer });
+    }
+  });
+
+  socket.on("ice-candidate", ({ to, candidate }) => {
+    const socketId = SocketMapping.get(to);
+    if (socketId) {
+      socket.to(socketId).emit("ice-candidate", { candidate });
     }
   });
 

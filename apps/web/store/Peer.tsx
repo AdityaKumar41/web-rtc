@@ -20,13 +20,23 @@ interface PeerProviderProps {
 export const PeerProvider = ({ children }: PeerProviderProps) => {
   const peer = useMemo(() => {
     try {
-      return new RTCPeerConnection({
+      const p = new RTCPeerConnection({
         iceServers: [
           {
-            urls: "stun:stun.l.google.com:5349",
+            urls: [
+              "stun:stun.l.google.com:19302",
+              "stun:stun1.l.google.com:19302",
+            ],
           },
         ],
+        iceCandidatePoolSize: 10,
       });
+
+      p.oniceconnectionstatechange = () => {
+        console.log("ICE Connection State:", p.iceConnectionState);
+      };
+
+      return p;
     } catch (error) {
       console.error("Failed to create RTCPeerConnection:", error);
       return null;
